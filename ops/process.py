@@ -302,10 +302,18 @@ def apply_watershed(img, smooth=4):
     distance = ndi.distance_transform_edt(img)
     if smooth > 0:
         distance = skimage.filters.gaussian(distance, sigma=smooth)
-    local_max = skimage.feature.peak_local_max(
-        distance, indices=False, footprint=np.ones((3, 3)), exclude_border=False
+
+    # 1. Modern skimage returns coordinates (shape: [N, 2])
+    peak_coords = skimage.feature.peak_local_max(
+        distance, footprint=np.ones((3, 3)), exclude_border=False
     )
 
+    # 2. Re-create the 2D boolean mask expected by ndi.label
+    local_max = np.zeros_like(distance, dtype=bool)
+    if peak_coords.size > 0:
+        local_max[tuple(peak_coords.T)] = True
+
+    # 3. Resume original pipeline logic seamlessly
     markers = ndi.label(local_max)[0]
     result = skimage.segmentation.watershed(-distance, markers, mask=img)
     return result.astype(np.uint16)
